@@ -1,0 +1,13 @@
+## Interface: 120000
+## Title: iLevelPeek
+## Notes: Injects item level, M+ score, tier count and run breakdown into unit tooltips.
+## Author: Efymer
+## Version: 1.0.0
+## IconTexture: Interface\Icons\SPELL_Holy_MindVision
+## Category: Other
+
+Config.lua
+Colors.lua
+Locales.lua
+Core.lua
+Tooltip.lua
