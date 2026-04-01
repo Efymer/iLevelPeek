@@ -124,7 +124,7 @@ local function addTooltipLines(tooltip, member, unit)
 
     local mythicPlusRating = member.mythicPlusRating
     local mplusText = mythicPlusRating and string.format("%s: %d", L.UNIT_TOOLTIP_MPLUS_LABEL, mythicPlusRating)
-        or string.format("%s: --", L.UNIT_TOOLTIP_MPLUS_LABEL)
+        or string.format("%s: 0", L.UNIT_TOOLTIP_MPLUS_LABEL)
     local mR, mG, mB = getMythicPlusColor(mythicPlusRating or 0)
 
     if member.itemLevel then

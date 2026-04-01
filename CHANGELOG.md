@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.0.1] - 2026-04-01
+
+### Fixed
+
+- Display M+ rating as 0 instead of "--" when a player has no rating
+
 ## [1.0.0] - 2026-03-31
 
 ### Added
