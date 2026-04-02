@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.0] - 2026-04-02
+
+### Added
+
+- Raid progress display for self-player tooltip using `C_RaidLocks.IsEncounterComplete`
+- Compact "Raid: X/Y D" line on main tooltip showing best difficulty with progress
+- Detailed per-raid, per-difficulty breakdown in shift-hover expanded view
+- Dynamic raid/encounter discovery via Encounter Journal APIs (no hardcoded IDs)
+
 ## [1.0.1] - 2026-04-01
 
 ### Fixed

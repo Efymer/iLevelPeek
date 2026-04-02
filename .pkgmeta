@@ -1,0 +1,11 @@
+package-as: iLevelPeek
+
+changelog-file: CHANGELOG.md
+
+ignore:
+  - .github
+  - .claude
+  - CLAUDE.md
+  - README.md
+  - CHANGELOG.md
+  - .gitignore

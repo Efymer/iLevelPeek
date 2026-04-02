@@ -4,8 +4,16 @@ local L = addon.L
 addon.Tooltip = addon.Tooltip or {}
 
 local Tooltip = addon.Tooltip
+
+local function setting(key)
+    if addon.Settings and addon.Settings.Get then
+        return addon.Settings:Get(key)
+    end
+    return true
+end
 local pendingGUID = nil
 local pendingUnit = nil
+local pendingAchievementGUID = nil
 local lastInspectTime = 0
 local retryTimer = nil
 local lastShiftState = false
@@ -74,13 +82,96 @@ local function countTierSetPieces(unit)
     return count
 end
 
+-- Returns true if a statistic string indicates at least 1 kill
+local function statValueHasKill(value)
+    if not value or value == "--" or value == "0" then return false end
+    return true
+end
+
+-- Compute raid progress using a stat lookup function: fn(statID) -> string
+local function computeRaidProgress(statFn)
+    local raids = addon.Config.raids
+    if not raids or #raids == 0 then return nil end
+
+    local difficulties = addon.Config.raidDifficulties
+    local results = {}
+
+    for _, raid in ipairs(raids) do
+        local raidResult = {
+            name = raid.name,
+            totalBosses = #raid.encounters,
+            difficulties = {},
+        }
+
+        for _, diff in ipairs(difficulties) do
+            local killed = 0
+            for _, enc in ipairs(raid.encounters) do
+                local statID = enc.stats[diff.key]
+                if statID and statID > 0 and statValueHasKill(statFn(statID)) then
+                    killed = killed + 1
+                end
+            end
+            raidResult.difficulties[#raidResult.difficulties + 1] = {
+                key = diff.key,
+                short = diff.short,
+                color = diff.color,
+                killed = killed,
+                hidden = diff.hidden,
+            }
+        end
+
+        results[#results + 1] = raidResult
+    end
+
+    return results
+end
+
+-- Returns raid progress for the local player
+local function getSelfRaidProgress()
+    return computeRaidProgress(GetStatistic)
+end
+
+-- Returns raid progress for an inspected player
+local function getComparisonRaidProgress()
+    if not GetComparisonStatistic then return nil end
+    return computeRaidProgress(GetComparisonStatistic)
+end
+
+-- Returns compact summary string like "3/9 H" aggregated across all raids
+local function getBestRaidSummary(raidProgressList)
+    if not raidProgressList or #raidProgressList == 0 then return nil end
+
+    local difficulties = addon.Config.raidDifficulties
+    for _, diff in ipairs(difficulties) do
+        if not diff.hidden then
+            local totalKilled = 0
+            local totalBosses = 0
+            for _, raid in ipairs(raidProgressList) do
+                for _, rd in ipairs(raid.difficulties) do
+                    if rd.key == diff.key then
+                        totalKilled = totalKilled + rd.killed
+                        totalBosses = totalBosses + raid.totalBosses
+                    end
+                end
+            end
+            if totalKilled > 0 then
+                return string.format("%d/%d %s", totalKilled, totalBosses, diff.short), diff.color
+            end
+        end
+    end
+
+    return nil
+end
+
 local function addShiftHoverLines(tooltip, member, unit)
     -- Tier set count
-    local tierCount = member.tierSetCount or 0
-    tooltip:AddLine(string.format("%s: %d/5", L.UNIT_TOOLTIP_TIER_LABEL, tierCount), 0.94, 0.49, 0.72)
+    if setting("showTierSet") then
+        local tierCount = member.tierSetCount or 0
+        tooltip:AddLine(string.format("%s: %d/5", L.UNIT_TOOLTIP_TIER_LABEL, tierCount), 0.94, 0.49, 0.72)
+    end
 
     -- M+ dungeon breakdown
-    local runs = member.mythicPlusRuns
+    local runs = setting("showMythicPlus") and member.mythicPlusRuns or nil
     if runs and #runs > 0 then
         table.sort(runs, function(a, b) return (a.mapScore or 0) > (b.mapScore or 0) end)
         tooltip:AddLine(" ")
@@ -111,6 +202,41 @@ local function addShiftHoverLines(tooltip, member, unit)
             )
         end
     end
+
+    -- Raid progress breakdown for inspected player
+    local raidProgress = setting("showRaidProgress") and member.raidProgress or nil
+    if raidProgress then
+        local hasAnyProgress = false
+        for _, raid in ipairs(raidProgress) do
+            for _, diff in ipairs(raid.difficulties) do
+                if diff.killed > 0 and not diff.hidden then hasAnyProgress = true break end
+            end
+            if hasAnyProgress then break end
+        end
+        if hasAnyProgress then
+            tooltip:AddLine(" ")
+            tooltip:AddLine(L.UNIT_TOOLTIP_RAID_HEADER, 1.0, 0.82, 0.0)
+            for _, raid in ipairs(raidProgress) do
+                local hasAny = false
+                for _, diff in ipairs(raid.difficulties) do
+                    if diff.killed > 0 and not diff.hidden then hasAny = true break end
+                end
+                if hasAny then
+                    tooltip:AddLine(raid.name, 0.95, 0.95, 0.95)
+                    for _, diff in ipairs(raid.difficulties) do
+                        if diff.killed > 0 and not diff.hidden then
+                            tooltip:AddDoubleLine(
+                                string.format("  %s", diff.short),
+                                string.format("%d/%d", diff.killed, raid.totalBosses),
+                                diff.color[1], diff.color[2], diff.color[3],
+                                diff.color[1], diff.color[2], diff.color[3]
+                            )
+                        end
+                    end
+                end
+            end
+        end
+    end
 end
 
 local function addTooltipLines(tooltip, member, unit)
@@ -123,29 +249,41 @@ local function addTooltipLines(tooltip, member, unit)
     end
 
     local mythicPlusRating = member.mythicPlusRating
-    local mplusText = mythicPlusRating and string.format("%s: %d", L.UNIT_TOOLTIP_MPLUS_LABEL, mythicPlusRating)
-        or string.format("%s: 0", L.UNIT_TOOLTIP_MPLUS_LABEL)
+    local mplusText = setting("showMythicPlus") and (mythicPlusRating and string.format("%s: %d", L.UNIT_TOOLTIP_MPLUS_LABEL, mythicPlusRating)
+        or string.format("%s: 0", L.UNIT_TOOLTIP_MPLUS_LABEL)) or nil
     local mR, mG, mB = getMythicPlusColor(mythicPlusRating or 0)
 
-    if member.itemLevel then
-        local iR, iG, iB = addon.Colors:GetItemLevelColor(member.itemLevel)
-        tooltip:AddDoubleLine(
-            string.format("%s: %.1f", L.UNIT_TOOLTIP_ILVL_LABEL, member.itemLevel),
-            mplusText,
-            iR, iG, iB, mR, mG, mB
-        )
-    else
-        tooltip:AddDoubleLine(
-            string.format("%s: ...", L.UNIT_TOOLTIP_ILVL_LABEL),
-            mplusText,
-            0.85, 0.82, 0.50, mR, mG, mB
-        )
+    local leftText, rightText
+    if setting("showItemLevel") then
+        if member.itemLevel then
+            leftText = string.format("%s: %.1f", L.UNIT_TOOLTIP_ILVL_LABEL, member.itemLevel)
+        else
+            leftText = string.format("%s: ...", L.UNIT_TOOLTIP_ILVL_LABEL)
+        end
+    end
+
+    if leftText and mplusText then
+        local iR, iG, iB = member.itemLevel and addon.Colors:GetItemLevelColor(member.itemLevel) or 0.85, 0.82, 0.50
+        tooltip:AddDoubleLine(leftText, mplusText, iR, iG, iB, mR, mG, mB)
+    elseif leftText then
+        local iR, iG, iB = member.itemLevel and addon.Colors:GetItemLevelColor(member.itemLevel) or 0.85, 0.82, 0.50
+        tooltip:AddLine(leftText, iR, iG, iB)
+    elseif mplusText then
+        tooltip:AddLine(mplusText, mR, mG, mB)
     end
     tooltip[TOOLTIP_LINE_ADDED_KEY] = true
 
-    if IsShiftKeyDown() then
+    if setting("showRaidProgress") and member.raidProgress then
+        local raidSummary, raidColor = getBestRaidSummary(member.raidProgress)
+        if raidSummary and raidColor then
+            tooltip:AddDoubleLine(" ", string.format("%s: %s", L.UNIT_TOOLTIP_RAID_LABEL, raidSummary),
+                0, 0, 0, raidColor[1], raidColor[2], raidColor[3])
+        end
+    end
+
+    if setting("showShiftDetails") and IsShiftKeyDown() then
         addShiftHoverLines(tooltip, member, unit)
-    else
+    elseif setting("showShiftDetails") then
         tooltip:AddLine(L.UNIT_TOOLTIP_SHIFT_HINT, 0.50, 0.50, 0.50)
     end
 end
@@ -173,9 +311,10 @@ local function onTooltipSetUnit(tooltip, data)
         return
     end
 
-    -- Color player name by class
     local _, classFile = UnitClass(unit)
-    if classFile then
+
+    -- Color player name by class
+    if setting("showClassColors") and classFile then
         local classColor = RAID_CLASS_COLORS[classFile]
         if classColor then
             local nameLine = _G["GameTooltipTextLeft1"]
@@ -186,23 +325,25 @@ local function onTooltipSetUnit(tooltip, data)
     end
 
     -- Modify existing guild line to include rank
-    local guildName, guildRankName = GetGuildInfo(unit)
-    if guildName and guildRankName then
-        for i = 2, tooltip:NumLines() do
-            local line = _G["GameTooltipTextLeft" .. i]
-            if line then
-                local text = line:GetText()
-                if text and text:find(guildName, 1, true) then
-                    line:SetText(string.format("%s of <%s>", guildRankName, guildName))
-                    line:SetTextColor(0.25, 1.0, 0.25)
-                    break
+    if setting("showGuildRank") then
+        local guildName, guildRankName = GetGuildInfo(unit)
+        if guildName and guildRankName then
+            for i = 2, tooltip:NumLines() do
+                local line = _G["GameTooltipTextLeft" .. i]
+                if line then
+                    local text = line:GetText()
+                    if text and text:find(guildName, 1, true) then
+                        line:SetText(string.format("%s of <%s>", guildRankName, guildName))
+                        line:SetTextColor(0.25, 1.0, 0.25)
+                        break
+                    end
                 end
             end
         end
     end
 
     -- Color the class name in the "Level XX Spec Class" line
-    if classFile then
+    if setting("showClassColors") and classFile then
         local classColor = RAID_CLASS_COLORS[classFile]
         local localizedClass = UnitClass(unit)
         if classColor and localizedClass then
@@ -230,53 +371,105 @@ local function onTooltipSetUnit(tooltip, data)
         local score = C_ChallengeMode and C_ChallengeMode.GetOverallDungeonScore and C_ChallengeMode.GetOverallDungeonScore() or 0
         local mR, mG, mB = getMythicPlusColor(score)
 
+        local selfRaidProgress = setting("showRaidProgress") and getSelfRaidProgress() or nil
+        local raidSummary, raidColor = getBestRaidSummary(selfRaidProgress)
+
         if itemLevel and itemLevel > 0 then
             local iR, iG, iB = addon.Colors:GetItemLevelColor(addon:RoundItemLevel(itemLevel))
-            tooltip:AddDoubleLine(
-                string.format("%s: %.1f", L.UNIT_TOOLTIP_ILVL_LABEL, addon:RoundItemLevel(itemLevel)),
-                string.format("%s: %d", L.UNIT_TOOLTIP_MPLUS_LABEL, score),
-                iR, iG, iB, mR, mG, mB
-            )
+            local leftText = setting("showItemLevel") and string.format("%s: %.1f", L.UNIT_TOOLTIP_ILVL_LABEL, addon:RoundItemLevel(itemLevel)) or nil
+            local rightText = setting("showMythicPlus") and string.format("%s: %d", L.UNIT_TOOLTIP_MPLUS_LABEL, score) or nil
+
+            if leftText and rightText then
+                tooltip:AddDoubleLine(leftText, rightText, iR, iG, iB, mR, mG, mB)
+            elseif leftText then
+                tooltip:AddLine(leftText, iR, iG, iB)
+            elseif rightText then
+                tooltip:AddLine(rightText, mR, mG, mB)
+            end
             tooltip[TOOLTIP_LINE_ADDED_KEY] = true
         end
 
-        if IsShiftKeyDown() then
+        if raidSummary and raidColor then
+            tooltip:AddDoubleLine(" ", string.format("%s: %s", L.UNIT_TOOLTIP_RAID_LABEL, raidSummary),
+                0, 0, 0, raidColor[1], raidColor[2], raidColor[3])
+        end
+
+        if setting("showShiftDetails") and IsShiftKeyDown() then
             -- Tier set for self
-            local selfTierCount = countTierSetPieces("player")
-            tooltip:AddLine(string.format("%s: %d/5", L.UNIT_TOOLTIP_TIER_LABEL, selfTierCount), 0.94, 0.49, 0.72)
+            if setting("showTierSet") then
+                local selfTierCount = countTierSetPieces("player")
+                tooltip:AddLine(string.format("%s: %d/5", L.UNIT_TOOLTIP_TIER_LABEL, selfTierCount), 0.94, 0.49, 0.72)
+            end
+
             -- M+ breakdown for self
-            local selfSummary = C_PlayerInfo and C_PlayerInfo.GetPlayerMythicPlusRatingSummary
-                and C_PlayerInfo.GetPlayerMythicPlusRatingSummary("player")
-            if selfSummary and selfSummary.runs then
-                local sortedRuns = {}
-                for i, run in ipairs(selfSummary.runs) do sortedRuns[i] = run end
-                table.sort(sortedRuns, function(a, b) return (a.mapScore or 0) > (b.mapScore or 0) end)
-                tooltip:AddLine(" ")
-                tooltip:AddLine("Top 5 M+ Runs", 1.0, 0.82, 0.0)
-                local count = 0
-                for _, run in ipairs(sortedRuns) do
-                    count = count + 1
-                    if count > 5 then break end
-                    local dungeonName = "Unknown"
-                    if C_ChallengeMode and C_ChallengeMode.GetMapUIInfo then
-                        local name = C_ChallengeMode.GetMapUIInfo(run.challengeModeID)
-                        if name then dungeonName = name end
+            if setting("showMythicPlus") then
+                local selfSummary = C_PlayerInfo and C_PlayerInfo.GetPlayerMythicPlusRatingSummary
+                    and C_PlayerInfo.GetPlayerMythicPlusRatingSummary("player")
+                if selfSummary and selfSummary.runs then
+                    local sortedRuns = {}
+                    for i, run in ipairs(selfSummary.runs) do sortedRuns[i] = run end
+                    table.sort(sortedRuns, function(a, b) return (a.mapScore or 0) > (b.mapScore or 0) end)
+                    tooltip:AddLine(" ")
+                    tooltip:AddLine("Top 5 M+ Runs", 1.0, 0.82, 0.0)
+                    local count = 0
+                    for _, run in ipairs(sortedRuns) do
+                        count = count + 1
+                        if count > 5 then break end
+                        local dungeonName = "Unknown"
+                        if C_ChallengeMode and C_ChallengeMode.GetMapUIInfo then
+                            local name = C_ChallengeMode.GetMapUIInfo(run.challengeModeID)
+                            if name then dungeonName = name end
+                        end
+                        local levelText = string.format("+%d", run.bestRunLevel or 0)
+                        if run.finishedSuccess then
+                            levelText = levelText .. " |A:common-icon-checkmark:12:12|a"
+                        else
+                            levelText = levelText .. " |A:common-icon-redx:12:12|a"
+                        end
+                        local sR, sG, sB = getMythicPlusColor(run.mapScore or 0)
+                        tooltip:AddDoubleLine(
+                            dungeonName,
+                            string.format("%s  (%d)", levelText, run.mapScore or 0),
+                            0.85, 0.85, 0.85, sR, sG, sB
+                        )
                     end
-                    local levelText = string.format("+%d", run.bestRunLevel or 0)
-                    if run.finishedSuccess then
-                        levelText = levelText .. " |A:common-icon-checkmark:12:12|a"
-                    else
-                        levelText = levelText .. " |A:common-icon-redx:12:12|a"
-                    end
-                    local sR, sG, sB = getMythicPlusColor(run.mapScore or 0)
-                    tooltip:AddDoubleLine(
-                        dungeonName,
-                        string.format("%s  (%d)", levelText, run.mapScore or 0),
-                        0.85, 0.85, 0.85, sR, sG, sB
-                    )
                 end
             end
-        else
+
+            -- Raid progress breakdown
+            if setting("showRaidProgress") and selfRaidProgress then
+                local hasAnyProgress = false
+                for _, raid in ipairs(selfRaidProgress) do
+                    for _, diff in ipairs(raid.difficulties) do
+                        if diff.killed > 0 and not diff.hidden then hasAnyProgress = true break end
+                    end
+                    if hasAnyProgress then break end
+                end
+                if hasAnyProgress then
+                    tooltip:AddLine(" ")
+                    tooltip:AddLine(L.UNIT_TOOLTIP_RAID_HEADER, 1.0, 0.82, 0.0)
+                    for _, raid in ipairs(selfRaidProgress) do
+                        local hasAny = false
+                        for _, diff in ipairs(raid.difficulties) do
+                            if diff.killed > 0 and not diff.hidden then hasAny = true break end
+                        end
+                        if hasAny then
+                            tooltip:AddLine(raid.name, 0.95, 0.95, 0.95)
+                            for _, diff in ipairs(raid.difficulties) do
+                                if diff.killed > 0 and not diff.hidden then
+                                    tooltip:AddDoubleLine(
+                                        string.format("  %s", diff.short),
+                                        string.format("%d/%d", diff.killed, raid.totalBosses),
+                                        diff.color[1], diff.color[2], diff.color[3],
+                                        diff.color[1], diff.color[2], diff.color[3]
+                                    )
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        elseif setting("showShiftDetails") then
             tooltip:AddLine(L.UNIT_TOOLTIP_SHIFT_HINT, 0.50, 0.50, 0.50)
         end
 
@@ -318,6 +511,12 @@ local function onTooltipSetUnit(tooltip, data)
         end
     end
     addTooltipLines(tooltip, member, unit)
+
+    -- Achievement comparison works without inspect range — always request it
+    if not member.raidProgress then
+        pendingAchievementGUID = guid
+        SetAchievementComparisonUnit(unit)
+    end
 
     if retryTimer then
         retryTimer:Cancel()
@@ -459,5 +658,34 @@ function Tooltip:OnInspectReady(guid)
     end
 
     ClearInspectPlayer()
+    return true
+end
+
+function Tooltip:OnAchievementReady(guid)
+    if not pendingAchievementGUID or pendingAchievementGUID ~= guid then
+        return false
+    end
+
+    local member = addon.members[guid]
+    pendingAchievementGUID = nil
+
+    if not member then
+        ClearAchievementComparisonUnit()
+        return true
+    end
+
+    member.raidProgress = getComparisonRaidProgress()
+
+    ClearAchievementComparisonUnit()
+
+    -- Refresh tooltip if still showing this player
+    if GameTooltip:IsShown() then
+        local tooltipUnit = safeGetTooltipUnit(GameTooltip)
+        if tooltipUnit and UnitGUID(tooltipUnit) == guid then
+            clearTooltipFlag(GameTooltip)
+            GameTooltip:SetUnit(tooltipUnit)
+        end
+    end
+
     return true
 end
