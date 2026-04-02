@@ -36,32 +36,33 @@ function addon.Settings:Get(key)
 end
 
 function addon.Settings:CreatePanel()
+    local L = addon.L
     local category, layout = Settings.RegisterVerticalLayoutCategory(addonName)
 
-    layout:AddInitializer(CreateSettingsListSectionHeaderInitializer("Tooltip Display"))
+    layout:AddInitializer(CreateSettingsListSectionHeaderInitializer(L.SETTINGS_SECTION_DISPLAY))
 
-    self:AddToggle(category, "showItemLevel", "Show Item Level",
-        "Display item level in the tooltip.")
+    self:AddToggle(category, "showItemLevel", L.SETTINGS_SHOW_ILVL_NAME,
+        L.SETTINGS_SHOW_ILVL_TIP)
 
-    self:AddToggle(category, "showMythicPlus", "Show M+ Score",
-        "Display Mythic+ score and top runs in the tooltip.")
+    self:AddToggle(category, "showMythicPlus", L.SETTINGS_SHOW_MPLUS_NAME,
+        L.SETTINGS_SHOW_MPLUS_TIP)
 
-    self:AddToggle(category, "showRaidProgress", "Show Raid Progress",
-        "Display raid boss kill progress in the tooltip.")
+    self:AddToggle(category, "showRaidProgress", L.SETTINGS_SHOW_RAID_NAME,
+        L.SETTINGS_SHOW_RAID_TIP)
 
-    self:AddToggle(category, "showTierSet", "Show Tier Set Count",
-        "Display tier set piece count in the shift-hover tooltip.")
+    self:AddToggle(category, "showTierSet", L.SETTINGS_SHOW_TIER_NAME,
+        L.SETTINGS_SHOW_TIER_TIP)
 
-    layout:AddInitializer(CreateSettingsListSectionHeaderInitializer("Tooltip Appearance"))
+    layout:AddInitializer(CreateSettingsListSectionHeaderInitializer(L.SETTINGS_SECTION_APPEARANCE))
 
-    self:AddToggle(category, "showClassColors", "Class-Colored Names",
-        "Color player names and class text by their class color.")
+    self:AddToggle(category, "showClassColors", L.SETTINGS_SHOW_COLORS_NAME,
+        L.SETTINGS_SHOW_COLORS_TIP)
 
-    self:AddToggle(category, "showGuildRank", "Show Guild Rank",
-        "Display guild rank alongside guild name.")
+    self:AddToggle(category, "showGuildRank", L.SETTINGS_SHOW_GUILD_NAME,
+        L.SETTINGS_SHOW_GUILD_TIP)
 
-    self:AddToggle(category, "showShiftDetails", "Shift-Hover Details",
-        "Enable expanded details when holding Shift over a tooltip.")
+    self:AddToggle(category, "showShiftDetails", L.SETTINGS_SHOW_SHIFT_NAME,
+        L.SETTINGS_SHOW_SHIFT_TIP)
 
     Settings.RegisterAddOnCategory(category)
     self.categoryID = category:GetID()

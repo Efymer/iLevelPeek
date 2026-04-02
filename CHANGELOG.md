@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.2] - 2026-04-02
+
+### Added
+
+- Settings panel is now fully translated in Russian and Spanish
+
 ## [1.1.1] - 2026-04-02
 
 ### Added
