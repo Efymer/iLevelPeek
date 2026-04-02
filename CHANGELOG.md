@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.1] - 2026-04-02
+
+### Added
+
+- Russian localization (ruRU)
+- Spanish localization (esES, esMX)
+
 ## [1.1.0] - 2026-04-02
 
 ### Added
