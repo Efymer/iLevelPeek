@@ -7,5 +7,4 @@ ignore:
   - .claude
   - CLAUDE.md
   - README.md
-  - CHANGELOG.md
   - .gitignore
