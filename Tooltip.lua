@@ -306,8 +306,8 @@ local function onTooltipSetUnit(tooltip, data)
     end
 
     currentTooltipUnit = unit
-    local guid = UnitGUID(unit)
-    if not guid then
+    local guid = tostring(UnitGUID(unit) or "")
+    if guid == "" then
         return
     end
 
@@ -541,7 +541,7 @@ local function onTooltipSetUnit(tooltip, data)
             end
 
             local retryUnit = safeGetTooltipUnit(GameTooltip)
-            if not retryUnit or UnitGUID(retryUnit) ~= retryGUID then
+            if not retryUnit or tostring(UnitGUID(retryUnit) or "") ~= retryGUID then
                 return
             end
 
@@ -624,7 +624,7 @@ function Tooltip:OnInspectReady(guid)
     end
 
     local ratingSummary
-    if unit and UnitGUID(unit) == guid and C_PlayerInfo and C_PlayerInfo.GetPlayerMythicPlusRatingSummary then
+    if unit and tostring(UnitGUID(unit) or "") == guid and C_PlayerInfo and C_PlayerInfo.GetPlayerMythicPlusRatingSummary then
         ratingSummary = C_PlayerInfo.GetPlayerMythicPlusRatingSummary(unit)
     end
     if ratingSummary and ratingSummary.currentSeasonScore and ratingSummary.currentSeasonScore > 0 then
@@ -650,7 +650,7 @@ function Tooltip:OnInspectReady(guid)
     if member.itemLevel or member.mythicPlusRating then
         if GameTooltip:IsShown() then
             local tooltipUnit = safeGetTooltipUnit(GameTooltip)
-            if tooltipUnit and UnitGUID(tooltipUnit) == guid then
+            if tooltipUnit and tostring(UnitGUID(tooltipUnit) or "") == guid then
                 clearTooltipFlag(GameTooltip)
                 GameTooltip:SetUnit(tooltipUnit)
             end
@@ -681,7 +681,7 @@ function Tooltip:OnAchievementReady(guid)
     -- Refresh tooltip if still showing this player
     if GameTooltip:IsShown() then
         local tooltipUnit = safeGetTooltipUnit(GameTooltip)
-        if tooltipUnit and UnitGUID(tooltipUnit) == guid then
+        if tooltipUnit and tostring(UnitGUID(tooltipUnit) or "") == guid then
             clearTooltipFlag(GameTooltip)
             GameTooltip:SetUnit(tooltipUnit)
         end

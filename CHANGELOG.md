@@ -1,5 +1,11 @@
 # Changelog
 
+## [1.1.3] - 2026-04-07
+
+### Fixed
+
+- Fix tooltip error when inspecting other players ("secret string value" taint)
+
 ## [1.1.2] - 2026-04-02
 
 ### Added
