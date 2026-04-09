@@ -53,6 +53,7 @@ function addon:INSPECT_ACHIEVEMENT_READY(guid)
     end
 end
 
+
 eventFrame:SetScript("OnEvent", function(_, event, ...)
     local handler = addon[event]
     if handler then

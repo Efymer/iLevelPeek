@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.4] - 2026-04-09
+
+### Fixed
+
+- Fix tooltip errors during combat caused by tainted values
+- Fix M+ rating not showing for party/raid members when mouse moves during inspect
+
 ## [1.1.3] - 2026-04-07
 
 ### Fixed

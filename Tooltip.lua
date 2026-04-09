@@ -24,6 +24,23 @@ local MOUSEOVER_CACHE_TTL = 300
 local TOOLTIP_LINE_ADDED_KEY = addonName .. "_TooltipLineAdded"
 local TIER_SLOTS = {1, 3, 5, 7, 10}
 
+-- Compare two values inside pcall to avoid taint errors in combat
+local function safeEquals(a, b)
+    local ok, result = pcall(rawequal, a, b)
+    if ok then return result end
+    -- rawequal bypasses metamethods but may still taint; fall back to string match
+    ok, result = pcall(function() return a == b end)
+    if ok then return result end
+    return false
+end
+
+-- Return UnitGUID result; may still be tainted but safeEquals handles comparison
+local function safeUnitGUID(unit)
+    local ok, guid = pcall(UnitGUID, unit)
+    if ok and guid then return guid end
+    return nil
+end
+
 -- Wrapper for tooltip:GetUnit() that returns nil for secret/tainted values
 -- (Patch 12.0.0 marks unit tokens as secret in certain contexts like combat)
 local function safeGetTooltipUnit(tooltip)
@@ -306,8 +323,8 @@ local function onTooltipSetUnit(tooltip, data)
     end
 
     currentTooltipUnit = unit
-    local guid = tostring(UnitGUID(unit) or "")
-    if guid == "" then
+    local guid = safeUnitGUID(unit)
+    if not guid then
         return
     end
 
@@ -541,7 +558,7 @@ local function onTooltipSetUnit(tooltip, data)
             end
 
             local retryUnit = safeGetTooltipUnit(GameTooltip)
-            if not retryUnit or tostring(UnitGUID(retryUnit) or "") ~= retryGUID then
+            if not retryUnit or not safeEquals(safeUnitGUID(retryUnit), retryGUID) then
                 return
             end
 
@@ -600,7 +617,7 @@ function Tooltip:Initialize()
 end
 
 function Tooltip:OnInspectReady(guid)
-    if not pendingGUID or pendingGUID ~= guid then
+    if not pendingGUID or not safeEquals(pendingGUID, guid) then
         return false
     end
 
@@ -623,9 +640,33 @@ function Tooltip:OnInspectReady(guid)
 
     end
 
+    -- Resolve a valid unit token for M+ lookup.
+    -- "mouseover" may have gone stale while the inspect was in flight,
+    -- so fall back to group unit IDs (party1-4 / raid1-40) which are stable.
     local ratingSummary
-    if unit and tostring(UnitGUID(unit) or "") == guid and C_PlayerInfo and C_PlayerInfo.GetPlayerMythicPlusRatingSummary then
-        ratingSummary = C_PlayerInfo.GetPlayerMythicPlusRatingSummary(unit)
+    if C_PlayerInfo and C_PlayerInfo.GetPlayerMythicPlusRatingSummary then
+        local mPlusUnit
+        if unit and safeEquals(safeUnitGUID(unit), guid) then
+            mPlusUnit = unit
+        else
+            local prefix, count
+            if IsInRaid() then
+                prefix, count = "raid", GetNumGroupMembers()
+            elseif IsInGroup() then
+                prefix, count = "party", GetNumGroupMembers() - 1
+            end
+            if prefix then
+                for i = 1, count do
+                    if safeEquals(safeUnitGUID(prefix .. i), guid) then
+                        mPlusUnit = prefix .. i
+                        break
+                    end
+                end
+            end
+        end
+        if mPlusUnit then
+            ratingSummary = C_PlayerInfo.GetPlayerMythicPlusRatingSummary(mPlusUnit)
+        end
     end
     if ratingSummary and ratingSummary.currentSeasonScore and ratingSummary.currentSeasonScore > 0 then
         member.mythicPlusRating = ratingSummary.currentSeasonScore
@@ -650,7 +691,7 @@ function Tooltip:OnInspectReady(guid)
     if member.itemLevel or member.mythicPlusRating then
         if GameTooltip:IsShown() then
             local tooltipUnit = safeGetTooltipUnit(GameTooltip)
-            if tooltipUnit and tostring(UnitGUID(tooltipUnit) or "") == guid then
+            if tooltipUnit and safeEquals(safeUnitGUID(tooltipUnit), guid) then
                 clearTooltipFlag(GameTooltip)
                 GameTooltip:SetUnit(tooltipUnit)
             end
@@ -662,7 +703,7 @@ function Tooltip:OnInspectReady(guid)
 end
 
 function Tooltip:OnAchievementReady(guid)
-    if not pendingAchievementGUID or pendingAchievementGUID ~= guid then
+    if not pendingAchievementGUID or not safeEquals(pendingAchievementGUID, guid) then
         return false
     end
 
@@ -681,7 +722,7 @@ function Tooltip:OnAchievementReady(guid)
     -- Refresh tooltip if still showing this player
     if GameTooltip:IsShown() then
         local tooltipUnit = safeGetTooltipUnit(GameTooltip)
-        if tooltipUnit and tostring(UnitGUID(tooltipUnit) or "") == guid then
+        if tooltipUnit and safeEquals(safeUnitGUID(tooltipUnit), guid) then
             clearTooltipFlag(GameTooltip)
             GameTooltip:SetUnit(tooltipUnit)
         end
