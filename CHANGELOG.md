@@ -1,5 +1,10 @@
 # Changelog
 
+## [1.1.5] - 2026-04-12
+
+- Improve M+ rating fetching for party and raid members
+- Remove debug logging
+
 ## [1.1.4] - 2026-04-09
 
 ### Fixed

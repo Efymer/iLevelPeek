@@ -21,6 +21,8 @@ local currentTooltipUnit = nil
 
 local MOUSEOVER_INSPECT_THROTTLE = 1.5
 local MOUSEOVER_CACHE_TTL = 300
+local MPLUS_RETRY_INTERVAL = 3
+local MPLUS_RETRY_MAX = 5
 local TOOLTIP_LINE_ADDED_KEY = addonName .. "_TooltipLineAdded"
 local TIER_SLOTS = {1, 3, 5, 7, 10}
 
@@ -28,7 +30,6 @@ local TIER_SLOTS = {1, 3, 5, 7, 10}
 local function safeEquals(a, b)
     local ok, result = pcall(rawequal, a, b)
     if ok then return result end
-    -- rawequal bypasses metamethods but may still taint; fall back to string match
     ok, result = pcall(function() return a == b end)
     if ok then return result end
     return false
@@ -62,6 +63,71 @@ end
 local function canInspectMouseover()
     local now = addon:GetTimestamp()
     return (now - lastInspectTime) >= MOUSEOVER_INSPECT_THROTTLE
+end
+
+-- Find a stable group unit token (party1/raid5/etc.) for a given GUID
+local function findGroupUnit(guid)
+    local prefix, count
+    if IsInRaid() then
+        prefix, count = "raid", GetNumGroupMembers()
+    elseif IsInGroup() then
+        prefix, count = "party", GetNumGroupMembers() - 1
+    end
+    if not prefix then return nil end
+    for i = 1, count do
+        local u = prefix .. i
+        if safeEquals(safeUnitGUID(u), guid) then
+            return u
+        end
+    end
+    return nil
+end
+
+-- Fetch and cache M+ data from a rating summary into a member table
+local function cacheMythicPlusData(member, summary)
+    if not summary or not summary.currentSeasonScore or summary.currentSeasonScore <= 0 then
+        return false
+    end
+    member.mythicPlusRating = summary.currentSeasonScore
+    if summary.runs then
+        member.mythicPlusRuns = {}
+        for _, run in ipairs(summary.runs) do
+            member.mythicPlusRuns[#member.mythicPlusRuns + 1] = {
+                challengeModeID = run.challengeModeID,
+                mapScore = run.mapScore,
+                bestRunLevel = run.bestRunLevel,
+                finishedSuccess = run.finishedSuccess,
+            }
+        end
+    end
+    return true
+end
+
+-- Retry M+ fetch for a member whose data wasn't available yet
+local function retryMythicPlusFetch(guid, attempt)
+    attempt = attempt or 1
+    local member = addon.members[guid]
+    if not member or member.mythicPlusRating then return end
+
+    local u = findGroupUnit(guid)
+    if not u then return end
+
+    local summary = C_PlayerInfo and C_PlayerInfo.GetPlayerMythicPlusRatingSummary
+        and C_PlayerInfo.GetPlayerMythicPlusRatingSummary(u)
+    if cacheMythicPlusData(member, summary) then
+        -- Refresh tooltip if still showing this player
+        if GameTooltip:IsShown() then
+            local tooltipUnit = safeGetTooltipUnit(GameTooltip)
+            if tooltipUnit and safeEquals(safeUnitGUID(tooltipUnit), guid) then
+                clearTooltipFlag(GameTooltip)
+                GameTooltip:SetUnit(tooltipUnit)
+            end
+        end
+    elseif attempt < MPLUS_RETRY_MAX then
+        C_Timer.After(MPLUS_RETRY_INTERVAL, function()
+            retryMythicPlusFetch(guid, attempt + 1)
+        end)
+    end
 end
 
 local function getMythicPlusColor(score)
@@ -496,6 +562,11 @@ local function onTooltipSetUnit(tooltip, data)
     local member = addon.members[guid]
 
     if member and isMouseoverCacheValid(member) then
+        -- Re-try M+ fetch on cached members that are still missing it
+        if not member.mythicPlusRating and C_PlayerInfo and C_PlayerInfo.GetPlayerMythicPlusRatingSummary then
+            local summary = C_PlayerInfo.GetPlayerMythicPlusRatingSummary(unit)
+            cacheMythicPlusData(member, summary)
+        end
         addTooltipLines(tooltip, member, unit)
         return
     end
@@ -512,20 +583,7 @@ local function onTooltipSetUnit(tooltip, data)
     -- Pre-fetch M+ data immediately — works regardless of inspect range
     if C_PlayerInfo and C_PlayerInfo.GetPlayerMythicPlusRatingSummary then
         local ratingSummary = C_PlayerInfo.GetPlayerMythicPlusRatingSummary(unit)
-        if ratingSummary and ratingSummary.currentSeasonScore and ratingSummary.currentSeasonScore > 0 then
-            member.mythicPlusRating = ratingSummary.currentSeasonScore
-            if ratingSummary.runs then
-                member.mythicPlusRuns = {}
-                for _, run in ipairs(ratingSummary.runs) do
-                    member.mythicPlusRuns[#member.mythicPlusRuns + 1] = {
-                        challengeModeID = run.challengeModeID,
-                        mapScore = run.mapScore,
-                        bestRunLevel = run.bestRunLevel,
-                        finishedSuccess = run.finishedSuccess,
-                    }
-                end
-            end
-        end
+        cacheMythicPlusData(member, ratingSummary)
     end
     addTooltipLines(tooltip, member, unit)
 
@@ -637,7 +695,6 @@ function Tooltip:OnInspectReady(guid)
         member.itemLevel = addon:RoundItemLevel(itemLevel)
         member.lastScanAt = addon:GetTimestamp()
         member.status = "ready"
-
     end
 
     -- Resolve a valid unit token for M+ lookup.
@@ -649,41 +706,13 @@ function Tooltip:OnInspectReady(guid)
         if unit and safeEquals(safeUnitGUID(unit), guid) then
             mPlusUnit = unit
         else
-            local prefix, count
-            if IsInRaid() then
-                prefix, count = "raid", GetNumGroupMembers()
-            elseif IsInGroup() then
-                prefix, count = "party", GetNumGroupMembers() - 1
-            end
-            if prefix then
-                for i = 1, count do
-                    if safeEquals(safeUnitGUID(prefix .. i), guid) then
-                        mPlusUnit = prefix .. i
-                        break
-                    end
-                end
-            end
+            mPlusUnit = findGroupUnit(guid)
         end
         if mPlusUnit then
             ratingSummary = C_PlayerInfo.GetPlayerMythicPlusRatingSummary(mPlusUnit)
         end
     end
-    if ratingSummary and ratingSummary.currentSeasonScore and ratingSummary.currentSeasonScore > 0 then
-        member.mythicPlusRating = ratingSummary.currentSeasonScore
-    end
-
-    -- Cache M+ runs for shift-hover
-    if ratingSummary and ratingSummary.runs then
-        member.mythicPlusRuns = {}
-        for _, run in ipairs(ratingSummary.runs) do
-            member.mythicPlusRuns[#member.mythicPlusRuns + 1] = {
-                challengeModeID = run.challengeModeID,
-                mapScore = run.mapScore,
-                bestRunLevel = run.bestRunLevel,
-                finishedSuccess = run.finishedSuccess,
-            }
-        end
-    end
+    cacheMythicPlusData(member, ratingSummary)
 
     -- Cache tier set count
     member.tierSetCount = countTierSetPieces(unit)
@@ -696,6 +725,13 @@ function Tooltip:OnInspectReady(guid)
                 GameTooltip:SetUnit(tooltipUnit)
             end
         end
+    end
+
+    -- If M+ data is still missing, schedule retries — server may deliver it later
+    if not member.mythicPlusRating and (IsInGroup() or IsInRaid()) then
+        C_Timer.After(MPLUS_RETRY_INTERVAL, function()
+            retryMythicPlusFetch(guid, 1)
+        end)
     end
 
     ClearInspectPlayer()
