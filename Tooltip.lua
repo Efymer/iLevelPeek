@@ -588,7 +588,9 @@ local function onTooltipSetUnit(tooltip, data)
     addTooltipLines(tooltip, member, unit)
 
     -- Achievement comparison works without inspect range — always request it
-    if not member.raidProgress then
+    -- Skip when Blizzard_AchievementUI is loaded to avoid their
+    -- GetCategoryNumAchievements("summary") bug
+    if not member.raidProgress and not AchievementFrame then
         pendingAchievementGUID = guid
         SetAchievementComparisonUnit(unit)
     end

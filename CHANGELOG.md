@@ -1,5 +1,9 @@
 # Changelog
 
+## [1.1.6] - 2026-04-12
+
+- Fix achievement comparison error when Achievement UI has been opened
+
 ## [1.1.5] - 2026-04-12
 
 - Improve M+ rating fetching for party and raid members
