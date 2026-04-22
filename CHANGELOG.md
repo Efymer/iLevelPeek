@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.1.8]
+
+- Fix tooltip error when hovering empty world space on 12.0.5 — v1.1.8
+
 ## [v1.1.7]
 
 - Update for World of Warcraft 12.0.5 — v1.1.7

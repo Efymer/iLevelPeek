@@ -43,12 +43,13 @@ local function safeUnitGUID(unit)
 end
 
 -- Wrapper for tooltip:GetUnit() that returns nil for secret/tainted values
--- (Patch 12.0.0 marks unit tokens as secret in certain contexts like combat)
+-- (Patch 12.0.5 throws from GetUnit itself when the tooltip has no unit, e.g.
+-- SetWorldCursor fires for mouseover of empty world space)
 local function safeGetTooltipUnit(tooltip)
-    local _, unit = tooltip:GetUnit()
-    if not unit then return nil end
-    local ok = pcall(UnitExists, unit)
-    if not ok then return nil end
+    local ok, _, unit = pcall(tooltip.GetUnit, tooltip)
+    if not ok or not unit then return nil end
+    local existsOk = pcall(UnitExists, unit)
+    if not existsOk then return nil end
     return unit
 end
 
