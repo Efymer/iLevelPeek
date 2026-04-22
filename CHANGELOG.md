@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.1.7]
+
+- Update for World of Warcraft 12.0.5 — v1.1.7
+
 ## [1.1.6] - 2026-04-12
 
 - Fix achievement comparison error when Achievement UI has been opened
