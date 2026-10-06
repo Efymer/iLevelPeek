@@ -1,4 +1,4 @@
-name: Update TOC Interface version
+name: Release on new game client
 
 on:
   schedule:
@@ -7,14 +7,22 @@ on:
 
 permissions:
   contents: write
-  pull-requests: write
+
+concurrency:
+  group: toc-update
+  cancel-in-progress: false
 
 jobs:
   retail:
     runs-on: ubuntu-latest
+    env:
+      BRANCH: main
+      TAG_PREFIX: v
     steps:
       - name: Clone project
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Update TOC Interface version
         uses: p3lim/toc-interface-updater@v4
@@ -25,17 +33,78 @@ jobs:
           # Only the addon's own TOC in the repo root, not bundled libraries.
           depth: 1
 
-      - name: Create pull request
-        uses: peter-evans/create-pull-request@v8
-        with:
-          title: "Update Interface version (retail)"
-          commit-message: "Update Interface version for the new retail client"
-          branch: interface-version
-          delete-branch: true
-          body: |
-            A new World of Warcraft client version was detected and the TOC Interface version was updated.
+      - name: Bump version and changelog
+        id: bump
+        shell: python
+        run: |
+          import os, re, subprocess, datetime, pathlib
 
-            Before merging:
-            - [ ] Check the API changes for this patch (warcraft.wiki.gg, Patch_X.Y.Z/API_changes) against the addon code
-            - [ ] Load the addon in game and check for errors
-            - [ ] Bump the addon Version and CHANGELOG.md, then tag a release after merging
+          def out(key, value):
+              with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as f:
+                  f.write(key + "=" + value + "\n")
+
+          names = subprocess.check_output(["git", "diff", "--name-only"], text=True).split()
+          tocs = [n for n in names if n.endswith(".toc")]
+          if not tocs:
+              print("TOC already up to date, nothing to release.")
+              out("changed", "false")
+              raise SystemExit(0)
+
+          toc = pathlib.Path(tocs[0])
+          text = toc.read_text(encoding="utf-8")
+
+          iface = int(re.search(r"^## Interface:\s*(\d+)", text, re.M).group(1))
+          patch = f"{iface // 10000}.{iface % 10000 // 100}.{iface % 100}"
+
+          m = re.search(r"^(## Version:\s*)(\d+)\.(\d+)(?:\.(\d+))?", text, re.M)
+          if not m:
+              raise SystemExit("No '## Version:' line in " + str(toc))
+          major, minor, rev = int(m.group(2)), int(m.group(3)), int(m.group(4) or 0)
+          version = f"{major}.{minor}.{rev + 1}"
+          text = text[:m.start()] + m.group(1) + version + text[m.end():]
+          toc.write_text(text, encoding="utf-8")
+
+          tag = os.environ["TAG_PREFIX"] + version
+          log = pathlib.Path("CHANGELOG.md")
+          lines = log.read_text(encoding="utf-8").split("\n") if log.exists() else []
+          first = next((i for i, l in enumerate(lines) if l.startswith("## ")), None)
+          sample = lines[first] if first is not None else ""
+          if "](https://github.com/" in sample:
+              repo = os.environ["GITHUB_REPOSITORY"]
+              date = datetime.date.today().isoformat()
+              header = f"## [v{version}](https://github.com/{repo}/tree/{tag}) ({date})"
+          elif sample.startswith("## v"):
+              header = f"## v{version}"
+          else:
+              header = f"## [v{version}]"
+          entry = [header, "", f"- Update for World of Warcraft {patch} — v{version}", ""]
+          if first is None:
+              lines = (lines[:1] + [""] if lines else []) + entry + lines[1:]
+          else:
+              lines = lines[:first] + entry + lines[first:]
+          log.write_text("\n".join(lines), encoding="utf-8")
+
+          print(f"Interface {iface} (patch {patch}): releasing {tag}")
+          out("changed", "true")
+          out("version", version)
+          out("tag", tag)
+          out("patch", patch)
+
+      - name: Commit, tag and push
+        if: steps.bump.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "Update for World of Warcraft ${{ steps.bump.outputs.patch }} — v${{ steps.bump.outputs.version }}"
+          git tag "${{ steps.bump.outputs.tag }}"
+          git push origin "HEAD:$BRANCH"
+          git push origin "${{ steps.bump.outputs.tag }}"
+
+      # Tags pushed with GITHUB_TOKEN do not trigger release.yml, so package
+      # and upload (CurseForge + GitHub release) right here.
+      - name: Package and release
+        if: steps.bump.outputs.changed == 'true'
+        uses: BigWigsMods/packager@v2
+        env:
+          CF_API_KEY: ${{ secrets.CF_API_TOKEN }}
+          GITHUB_OAUTH: ${{ secrets.GITHUB_TOKEN }}
