@@ -19,7 +19,11 @@ jobs:
       - name: Update TOC Interface version
         uses: p3lim/toc-interface-updater@v4
         with:
-          flavor: retail
+          # Block scalar on purpose: the action drops a single-line value.
+          flavor: |
+            retail
+          # Only the addon's own TOC in the repo root, not bundled libraries.
+          depth: 1
 
       - name: Create pull request
         uses: peter-evans/create-pull-request@v8
