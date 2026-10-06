@@ -1,0 +1,37 @@
+name: Update TOC Interface version
+
+on:
+  schedule:
+    - cron: "0 12 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  retail:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone project
+        uses: actions/checkout@v4
+
+      - name: Update TOC Interface version
+        uses: p3lim/toc-interface-updater@v4
+        with:
+          flavor: retail
+
+      - name: Create pull request
+        uses: peter-evans/create-pull-request@v8
+        with:
+          title: "Update Interface version (retail)"
+          commit-message: "Update Interface version for the new retail client"
+          branch: interface-version
+          delete-branch: true
+          body: |
+            A new World of Warcraft client version was detected and the TOC Interface version was updated.
+
+            Before merging:
+            - [ ] Check the API changes for this patch (warcraft.wiki.gg, Patch_X.Y.Z/API_changes) against the addon code
+            - [ ] Load the addon in game and check for errors
+            - [ ] Bump the addon Version and CHANGELOG.md, then tag a release after merging
