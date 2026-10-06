@@ -1,8 +1,8 @@
-## Interface: 120005
+## Interface: 120100
 ## Title: iLevelPeek
 ## Notes: Injects item level, M+ score, tier count and run breakdown into unit tooltips.
 ## Author: Efymer
-## Version: 1.1.8
+## Version: 1.1.9
 ## IconTexture: Interface\Icons\SPELL_Holy_MindVision
 ## Category: Other
 ## SavedVariables: iLevelPeekDB
