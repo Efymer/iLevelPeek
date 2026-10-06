@@ -2,12 +2,14 @@ local addonName, addon = ...
 
 addon.Config = addon.Config or {}
 
+-- Midnight Season 2 (12.1.0) upgrade track starting item levels
+-- (Season 1 + 46: Veteran 6/6 = 296, Champion 1/6 = 292)
 addon.Config.ilvlColorThresholds = {
-    { min = 272, color = { 1.00, 0.82, 0.00 } }, -- legendary gold
-    { min = 259, color = { 1.00, 0.50, 0.00 } }, -- orange, top-end
-    { min = 246, color = { 0.64, 0.21, 0.93 } }, -- epic purple
-    { min = 233, color = { 0.00, 0.44, 0.87 } }, -- rare blue
-    { min = 220, color = { 0.12, 1.00, 0.00 } }, -- uncommon green
+    { min = 318, color = { 1.00, 0.82, 0.00 } }, -- Myth track, legendary gold
+    { min = 305, color = { 1.00, 0.50, 0.00 } }, -- Hero track, orange
+    { min = 292, color = { 0.64, 0.21, 0.93 } }, -- Champion track, epic purple
+    { min = 279, color = { 0.00, 0.44, 0.87 } }, -- Veteran track, rare blue
+    { min = 266, color = { 0.12, 1.00, 0.00 } }, -- Adventurer track, uncommon green
     { min = 0,   color = { 0.62, 0.62, 0.62 } }, -- fallback gray
 }
 
@@ -19,31 +21,27 @@ addon.Config.raidDifficulties = {
     { key = "LFR", short = "LFR", color = { 0.62, 0.62, 0.62 }, hidden = true }, -- LFR (hidden from tooltip)
 }
 
--- Current tier raids with per-boss statistic IDs per difficulty
+-- Current tier raids (Midnight Season 2) with per-boss statistic IDs per difficulty
 -- GetStatistic(id) returns lifetime kill count; GetComparisonStatistic(id) for inspected players
+-- IDs from the Achievement DB2 (statistics category 15542), build 12.1.0.69933
 addon.Config.raids = {
     {
-        name = "Voidspire",
+        name = "The Venomous Abyss",
         encounters = {
-            { name = "Imperator Averzian",    stats = { M = 61279, H = 61278, N = 61277, LFR = 61276 } },
-            { name = "Vorasius",              stats = { M = 61283, H = 61282, N = 61281, LFR = 61280 } },
-            { name = "Fallen-King Salhadaar", stats = { M = 61287, H = 61286, N = 61285, LFR = 61284 } },
-            { name = "Vaelgor & Ezzorak",     stats = { M = 61291, H = 61290, N = 61289, LFR = 61288 } },
-            { name = "Lightblinded Vanguard", stats = { M = 61295, H = 61294, N = 61293, LFR = 61292 } },
-            { name = "Crown of the Cosmos",   stats = { M = 61299, H = 61298, N = 61297, LFR = 61296 } },
+            { name = "Nek'zali the Soulcoiler", stats = { M = 63536, H = 63535, N = 63534, LFR = 63533 } },
+            { name = "Entombed Sentinels",      stats = { M = 63540, H = 63539, N = 63538, LFR = 63537 } },
+            { name = "The Lost Explorers",      stats = { M = 63554, H = 63553, N = 63552, LFR = 63541 } },
+            { name = "Vashnik the Malignant",   stats = { M = 63557, H = 63556, N = 63555, LFR = 63547 } },
+            { name = "Sszorak",                 stats = { M = 63560, H = 63559, N = 63558, LFR = 63548 } },
+            { name = "The Twin Fangs",          stats = { M = 63563, H = 63562, N = 63561, LFR = 63549 } },
+            { name = "The Coiled Altar",        stats = { M = 63566, H = 63565, N = 63564, LFR = 63550 } },
+            { name = "Ula'tek",                 stats = { M = 63569, H = 63568, N = 63567, LFR = 63551 } },
         },
     },
     {
-        name = "Dreamrift",
+        name = "The Tidebound Grotto",
         encounters = {
-            { name = "Chimaerus", stats = { M = 61477, H = 61476, N = 61475, LFR = 61474 } },
-        },
-    },
-    {
-        name = "March on Quel'Danas",
-        encounters = {
-            { name = "Belo'ren, Child of Al'ar", stats = { M = 61303, H = 61302, N = 61301, LFR = 61300 } },
-            { name = "Midnight Falls",           stats = { M = 61307, H = 61306, N = 61305, LFR = 61304 } },
+            { name = "Nymrissa Wavecaller", stats = { M = 63616, H = 63615, N = 63614 } },
         },
     },
 }

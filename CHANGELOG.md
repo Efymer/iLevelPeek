@@ -1,8 +1,12 @@
 # Changelog
 
-## [v1.1.9]
+## [v1.2.0]
 
-- Update for World of Warcraft 12.1.0 — v1.1.9
+- Update for World of Warcraft 12.1.0 and Midnight Season 2 — v1.2.0
+- Raid progress now tracks The Venomous Abyss and The Tidebound Grotto — v1.2.0
+- Item level colors updated for Season 2 upgrade tracks (Adventurer 266 to Myth 318) — v1.2.0
+- Fix item level color not showing on other players' tooltips — v1.2.0
+- Fix an error when Mythic+ data arrived late for group members — v1.2.0
 
 ## [v1.1.8]
 

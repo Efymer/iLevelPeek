@@ -53,6 +53,10 @@ local function safeGetTooltipUnit(tooltip)
     return unit
 end
 
+local function clearTooltipFlag(tooltip)
+    tooltip[TOOLTIP_LINE_ADDED_KEY] = nil
+end
+
 local function isMouseoverCacheValid(member)
     if not member or not member.itemLevel or not member.lastScanAt then
         return false
@@ -346,11 +350,14 @@ local function addTooltipLines(tooltip, member, unit)
         end
     end
 
+    local iR, iG, iB = 0.85, 0.82, 0.50
+    if member.itemLevel then
+        iR, iG, iB = addon.Colors:GetItemLevelColor(member.itemLevel)
+    end
+
     if leftText and mplusText then
-        local iR, iG, iB = member.itemLevel and addon.Colors:GetItemLevelColor(member.itemLevel) or 0.85, 0.82, 0.50
         tooltip:AddDoubleLine(leftText, mplusText, iR, iG, iB, mR, mG, mB)
     elseif leftText then
-        local iR, iG, iB = member.itemLevel and addon.Colors:GetItemLevelColor(member.itemLevel) or 0.85, 0.82, 0.50
         tooltip:AddLine(leftText, iR, iG, iB)
     elseif mplusText then
         tooltip:AddLine(mplusText, mR, mG, mB)
@@ -370,10 +377,6 @@ local function addTooltipLines(tooltip, member, unit)
     elseif setting("showShiftDetails") then
         tooltip:AddLine(L.UNIT_TOOLTIP_SHIFT_HINT, 0.50, 0.50, 0.50)
     end
-end
-
-local function clearTooltipFlag(tooltip)
-    tooltip[TOOLTIP_LINE_ADDED_KEY] = nil
 end
 
 local function onTooltipSetUnit(tooltip, data)
