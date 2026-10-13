@@ -1,5 +1,9 @@
 # Changelog
 
+## [v1.2.1]
+
+- Update for World of Warcraft 12.1.5 — v1.2.1
+
 ## [v1.2.0]
 
 - Update for World of Warcraft 12.1.0 and Midnight Season 2 — v1.2.0
